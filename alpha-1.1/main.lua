@@ -1,14 +1,16 @@
 function love.load()
-	love.window.setMode(800, 800, { resizable = true, msaa = 0, vsync = false })
+	love.window.setMode(1000, 1000, { resizable = true, msaa = 0, vsync = false })
 	--[[
 	CHANGES:
-	-Cleaned up even more
+	-Fixed moving system, no longer sucks
+	-Added parallax
+	-Cleaned up code
+	-Another batch of optimizations and bugfixes
+	-Removed a lot of files no longer used
 	]]--
+	STOPVEL = 0.1
 	_G.world = love.physics.newWorld(0, 0, true)
 	curmap = "map2"
-	shine = require("shine")
-
-	shader = shine.dmg()
 	MAPDATA = require(curmap..".mapdata")
 	CHARACTERS = require("characters.default")
 	WEAPONS = require("weapons.default")
@@ -18,21 +20,13 @@ function love.load()
 	RANK = 1
 	LEVEL = 1
 	PARALLAX = 0.2
-	STOPVEL = 0.1
-	posx, posy = 0, 0
-	wX, wY = love.window.getMode()
-	wXh, wYh = wX / 2, wY / 2
-	mapTileResolution = 500
-	mapTileHalf = mapTileResolution / 2
-	love.graphics.setNewFont(72)
-	love.keyboard.setKeyRepeat(true)
-	love.physics.setMeter(15)
 
+	debugval = 0
 
 	--Load character
 	player = {
 		body = love.physics.newBody(_G.world, 500, 500, "dynamic"),
-		shape = love.physics.newCircleShape(20),
+		shape = love.physics.newCircleShape(45),
 		weapons = {}
 	}
 	function loadCharacter()
@@ -81,6 +75,7 @@ function love.load()
 		end
 	end
 	loadCharacter()
+	love.physics.setMeter(15)
 
 	map = {}
 	--Load map tiles into map table
@@ -128,6 +123,18 @@ function love.load()
 	end
 
 	player.fixture = love.physics.newFixture(player.body, player.shape, 0.25)
+	posx, posy = 0, 0
+	wX, wY = love.window.getMode()
+	wXh, wYh = wX / 2, wY / 2
+	mapTileResolution = 500
+	mapTileHalf = mapTileResolution / 2
+	mapTileRenderDistX = wXh
+	mapTileRenderDistY = wYh
+	physicsRate = 1 / 60
+	Dtt = 0
+	love.graphics.setNewFont(72)
+	love.keyboard.setKeyRepeat(true)
+
 	--Subtracts current x and y values from an indefinite amount of tuples
 	function subtractPos(Tbl)
 		local argtype = "x"
@@ -145,7 +152,7 @@ function love.load()
 	end
 	--Calculates if map tile is on screen
 	function isNear(X, Y)
-		if X > posx + wXh or X < posx - wXh - mapTileResolution or Y > posy + wYh or Y < posy - wYh - mapTileResolution then
+		if X > posx + mapTileRenderDistX or X < posx - mapTileRenderDistX - mapTileResolution or Y > posy + mapTileRenderDistY or Y < posy - mapTileRenderDistY - mapTileResolution then
 			return false
 		else
 			return true
@@ -167,11 +174,8 @@ function love.draw()
 	end
 	love.graphics.setColor(0, 255, 0)
 	love.graphics.print(love.timer.getFPS(), -wXh, -wYh, 0, 0.25)
-	love.graphics.setColor(255, 10, 10)
-	shader:draw(function()
+	love.graphics.setColor(193, 47, 14)
 	love.graphics.circle("fill", player.body:getX() - posx, player.body:getY() - posy, player.shape:getRadius())
-	love.graphics.setShader()
-	end)
 	for name, object in pairs(objects) do
 		if object.shape:getType() == "polygon" then
 			local polytbl = { object.body:getWorldPoints(object.shape:getPoints()) }
@@ -194,6 +198,8 @@ end
 function love.resize(Nx, Ny)
 	wX, wY = Nx, Ny
 	wXh, wYh = wX / 2, wY / 2
+	mapTileRenderDistX = wXh
+	mapTileRenderDistY = wYh
 end
 
 function love.update(Dt)
